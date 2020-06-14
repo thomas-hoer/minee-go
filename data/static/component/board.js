@@ -1,5 +1,5 @@
-'use strict';
-import { h } from '/js/preact.js';
+'use strict'
+import { h } from '/js/preact.js'
 
 function Board(props){
 	let children = props.children || []
@@ -15,7 +15,7 @@ function Board(props){
 	return h('div',{className:'content-board'},
 			h('div',{className:'board-title'},
 					h('div',null,props.title),
-					props.titleIcon && h('img',{src:props.titleIcon,onClick:props.iconOnClick}),
+					props.titleIcon && h('img',{src:props.titleIcon,onClick:props.iconOnClick,alt:props.titleIconAlt}),
 					props.icons && h('div',null,...props.icons)
 			),
 			h('div',{className:'board-body'},...body)

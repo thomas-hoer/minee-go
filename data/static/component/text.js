@@ -1,14 +1,16 @@
-'use strict';
-import { h } from '/js/preact.js';
+'use strict'
+import { h } from '/js/preact.js'
 
 function Text(props){
-	const type = props.type || 'text'
-	return h('input',{
+	const setEv = props.type=='number' ? value => props.property.set(parseFloat(value)): props.property.set;
+	const input = h('input',{
 		value:props.property.get(),
-		onChange:(ev)=>props.property.set(event.target.value),
-		type:type,
+		onChange:(ev)=>setEv(event.target.value),
+		type:props.type,
 		placeholder:props.placeholder,
-		})
+	})
+
+	return props.label?h('label',null,h('div',null,props.label),input):input
 }
 
 export {Text}

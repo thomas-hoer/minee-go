@@ -1,4 +1,4 @@
-'use strict';
+'use strict'
 import { h } from '/js/preact.js'
 import { Readonly } from './readonly.js'
 

@@ -1,5 +1,5 @@
-'use strict';
-import { h } from '/js/preact.js';
+'use strict'
+import { h } from '/js/preact.js'
 
 const loadComponent = async function(pathname, options){
 	const comp = await import(pathname+"component.js")
@@ -18,7 +18,7 @@ const loadComponents = async function(pathname, options, filter){
 		}
 	}
 	for(const element of elements){
-		if(element.endsWith("/") && ( noFilter||await filterOK(pathname+element,filter))){
+		if(element.endsWith("/") && ( noFilter||await filterOK(pathname+element))){
 			result.push(await loadComponent(pathname+element, options))
 		}
 	}

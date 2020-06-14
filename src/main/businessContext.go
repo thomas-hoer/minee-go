@@ -4,9 +4,11 @@ import (
 	"github.com/robertkrimen/otto"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type businessContext struct {
@@ -40,6 +42,16 @@ func (handler *StorageHandler) getBusinessContext(requestURI string) *businessCo
 		relativePath := call.Argument(0).String()
 		bc.relocate = relativePath
 		return otto.Value{}
+	})
+	bc.vm.Set("post", func(call otto.FunctionCall) otto.Value {
+		path := call.Argument(0).String()
+		mimeType := call.Argument(1).String()
+		data := call.Argument(2).String()
+		resp, _ := http.Post("http://localhost"+port+bc.targetURI+path, mimeType, strings.NewReader(data))
+		respData, _ := ioutil.ReadAll(resp.Body)
+		respString := string(respData)
+		respValue, _ := bc.vm.ToValue(respString)
+		return respValue
 	})
 	return bc
 }

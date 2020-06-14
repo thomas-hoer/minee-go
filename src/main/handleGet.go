@@ -27,23 +27,33 @@ func (handler *StorageHandler) handleGetUser(resp http.ResponseWriter, requestUR
 	}
 }
 func (handler *StorageHandler) handleGetIndex(resp http.ResponseWriter, base, requestURI, queryParam string) {
-	if queryParam == "json" {
-		fileInfos, _ := ioutil.ReadDir(base + requestURI)
-		names := make([]string, 0)
-		for _, fileInfo := range fileInfos {
-			if fileInfo.IsDir() {
-				names = append(names, `"`+fileInfo.Name()+`/"`)
-			} else {
-				names = append(names, `"`+fileInfo.Name()+`"`)
-			}
+	pathToRoot := strings.Repeat("../", strings.Count(requestURI, "/")-1)
+	fileInfos, _ := ioutil.ReadDir(base + requestURI)
+	names := make([]string, 0)
+	for _, fileInfo := range fileInfos {
+		if fileInfo.IsDir() {
+			names = append(names, `"`+fileInfo.Name()+`/"`)
+		} else {
+			names = append(names, `"`+fileInfo.Name()+`"`)
 		}
-		jsonOutput := `[` + strings.Join(names, `,`) + `]`
+	}
+	jsonOutput := `[` + strings.Join(names, `,`) + `]`
+	if queryParam == "json" {
 		resp.Header().Add("Content-Type", "application/json")
 		resp.Write([]byte(jsonOutput))
+	} else if queryParam == "module" {
+		resp.Header().Add("Content-Type", "application/javascript")
+		resp.Write([]byte("'use strict';\nconst data=" + jsonOutput + "\nexport {data}"))
 	} else {
 		resp.Header().Add("Content-Type", "text/html")
-		index, _ := ioutil.ReadFile(handler.static + "/index.html")
-		resp.Write([]byte(index))
+		templData, _ := ioutil.ReadFile(handler.static + "/index.html")
+		tmpl, err := template.New("index").Parse(string(templData))
+		if err != nil {
+			resp.Write([]byte(err.Error()))
+			resp.WriteHeader(500)
+			return
+		}
+		tmpl.Execute(resp, struct{ PageTitle, PathToRoot, JsonOutput string }{"TODO", pathToRoot, jsonOutput})
 	}
 }
 func contains(list []string, stringToFind string) bool {

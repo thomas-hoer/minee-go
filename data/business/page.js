@@ -1,6 +1,6 @@
-'use strict';
-import { h } from '/js/preact.js';
-import { Layout } from '/component/layout.js';
+'use strict'
+import { h } from '/js/preact.js'
+import { Layout } from '/component/layout.js'
 
 function Page(props){
 	const layoutOptions = {

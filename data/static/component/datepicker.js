@@ -1,5 +1,5 @@
-'use strict';
-import { h } from '/js/preact.js';
+'use strict'
+import { h } from '/js/preact.js'
 import { Readonly } from './readonly.js'
 
 function DatePicker(props){

@@ -1,5 +1,5 @@
-'use strict';
-import { h } from '/js/preact.js';
+'use strict'
+import { h } from '/js/preact.js'
 
 function Textarea(props){
 	return h('textarea',{

@@ -1,7 +1,7 @@
-'use strict';
-import { h, Fragment } from '/js/preact.js';
-import { Menu } from '/component/menu.js';
-import { Text } from '/component/text.js';
+'use strict'
+import { h, Fragment } from '/js/preact.js'
+import { Menu } from '/component/menu.js'
+import { Text } from '/component/text.js'
 
 function Layout(props){
 
