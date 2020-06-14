@@ -8,6 +8,7 @@ import (
 )
 
 const logRequests bool = true
+const port string = ":8080"
 
 func main() {
 
@@ -17,7 +18,7 @@ func main() {
 		user:     "data/user",
 	}
 	http.Handle("/", handleMiddleware(Gzip(sh)))
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(port, nil))
 }
 
 func handleMiddleware(next http.Handler) http.Handler {

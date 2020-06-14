@@ -27,7 +27,6 @@ func (handler *StorageHandler) handleGetUser(resp http.ResponseWriter, requestUR
 	}
 }
 func (handler *StorageHandler) handleGetIndex(resp http.ResponseWriter, base, requestURI, queryParam string) {
-	pathToRoot := strings.Repeat("../", strings.Count(requestURI, "/")-1)
 	fileInfos, _ := ioutil.ReadDir(base + requestURI)
 	names := make([]string, 0)
 	for _, fileInfo := range fileInfos {
@@ -46,14 +45,8 @@ func (handler *StorageHandler) handleGetIndex(resp http.ResponseWriter, base, re
 		resp.Write([]byte("'use strict';\nconst data=" + jsonOutput + "\nexport {data}"))
 	} else {
 		resp.Header().Add("Content-Type", "text/html")
-		templData, _ := ioutil.ReadFile(handler.static + "/index.html")
-		tmpl, err := template.New("index").Parse(string(templData))
-		if err != nil {
-			resp.Write([]byte(err.Error()))
-			resp.WriteHeader(500)
-			return
-		}
-		tmpl.Execute(resp, struct{ PageTitle, PathToRoot, JsonOutput string }{"TODO", pathToRoot, jsonOutput})
+		data, _ := ioutil.ReadFile(handler.static + "/index.html")
+		resp.Write(data)
 	}
 }
 func contains(list []string, stringToFind string) bool {
