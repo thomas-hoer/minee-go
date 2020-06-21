@@ -24,7 +24,12 @@ func (handler *StorageHandler) handlePostUser(resp http.ResponseWriter, req *htt
 	}
 
 	bc := handler.getBusinessContext(req.RequestURI)
-
+	dataType := typeOf(req)
+	if dataType == nil {
+		resp.WriteHeader(415)
+		return
+	}
+	bc.setContentType(*dataType)
 	newData, _ := ioutil.ReadAll(req.Body)
 	newDataString := string(newData)
 
@@ -34,10 +39,7 @@ func (handler *StorageHandler) handlePostUser(resp http.ResponseWriter, req *htt
 	bc.setTargetURI(req.RequestURI + newId + "/")
 
 	os.MkdirAll(newPath, os.ModePerm)
-	if dataType := typeOf(req); dataType != nil {
-		ioutil.WriteFile(newPath+"type", []byte(*dataType), os.ModePerm)
-		bc.setContentType(*dataType)
-	}
+	ioutil.WriteFile(newPath+"type", []byte(*dataType), os.ModePerm)
 	oldDataString := "null"
 	newDataString = bc.beforePost(newDataString)
 	newDataString = bc.compute(newDataString, oldDataString)
