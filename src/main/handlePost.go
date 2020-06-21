@@ -30,14 +30,12 @@ func (handler *StorageHandler) handlePostUser(resp http.ResponseWriter, req *htt
 
 	seqFileName := handler.user + req.RequestURI + "sequence.json"
 	seqdat, err := ioutil.ReadFile(seqFileName)
-	if err != nil {
-		log.Print(seqFileName+"sequence.json for POST event not found", err)
-		resp.Header().Set("Allow", "GET")
-		resp.WriteHeader(405)
-		return
-	}
 	var seq Sequence
-	json.Unmarshal(seqdat, &seq)
+	if err != nil {
+		log.Print(seqFileName + "sequence.json not found, generating new one")
+	} else {
+		json.Unmarshal(seqdat, &seq)
+	}
 	nextId := seq.NextId
 	seq.NextId++
 	seqdat, _ = json.Marshal(&seq)
