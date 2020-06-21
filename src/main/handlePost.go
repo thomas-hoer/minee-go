@@ -1,12 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -28,23 +25,14 @@ func (handler *StorageHandler) handlePostUser(resp http.ResponseWriter, req *htt
 
 	bc := handler.getBusinessContext(req.RequestURI)
 
-	seqFileName := handler.user + req.RequestURI + "sequence.json"
-	seqdat, err := ioutil.ReadFile(seqFileName)
-	var seq Sequence
-	if err != nil {
-		log.Print(seqFileName + "sequence.json not found, generating new one")
-	} else {
-		json.Unmarshal(seqdat, &seq)
-	}
-	nextId := seq.NextId
-	seq.NextId++
-	seqdat, _ = json.Marshal(&seq)
-	ioutil.WriteFile(seqFileName, seqdat, os.ModePerm)
-	bc.setNewId(nextId)
-	newPath := filename + strconv.Itoa(nextId) + "/"
-	bc.setTargetURI(req.RequestURI + strconv.Itoa(nextId) + "/")
 	newData, _ := ioutil.ReadAll(req.Body)
 	newDataString := string(newData)
+
+	newId := bc.generateId(newDataString)
+
+	newPath := filename + newId + "/"
+	bc.setTargetURI(req.RequestURI + newId + "/")
+
 	os.MkdirAll(newPath, os.ModePerm)
 	if dataType := typeOf(req); dataType != nil {
 		ioutil.WriteFile(newPath+"type", []byte(*dataType), os.ModePerm)
@@ -55,7 +43,7 @@ func (handler *StorageHandler) handlePostUser(resp http.ResponseWriter, req *htt
 	newDataString = bc.compute(newDataString, oldDataString)
 	newDataString = bc.afterPost(newDataString)
 	ioutil.WriteFile(newPath+"data.json", []byte(newDataString), os.ModePerm)
-	resp.Header().Add("Location", req.RequestURI+strconv.Itoa(nextId)+"/"+bc.relocate)
+	resp.Header().Add("Location", req.RequestURI+newId+"/"+bc.relocate)
 	resp.WriteHeader(201)
 }
 

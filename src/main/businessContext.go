@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/robertkrimen/otto"
 	"io/ioutil"
 	"log"
@@ -15,7 +16,7 @@ type businessContext struct {
 	vm           *otto.Otto
 	requestURI   string
 	targetURI    string
-	newId        int
+	newId        string
 	contentType  string
 	rootBusiness string
 	rootUser     string
@@ -55,9 +56,7 @@ func (handler *StorageHandler) getBusinessContext(requestURI string) *businessCo
 	})
 	return bc
 }
-func (bc *businessContext) setNewId(newId int) {
-	bc.newId = newId
-}
+
 func (bc *businessContext) setContentType(contentType string) {
 	bc.contentType = contentType
 }
@@ -76,7 +75,7 @@ func (bc *businessContext) compute(input string, oldData string) string {
 	bc.vm.Run("var data = " + input)
 	bc.vm.Run("var oldData = " + oldData)
 	bc.vm.Run(`var context = {
-	id:"` + strconv.Itoa(bc.newId) + `",
+	id:"` + bc.newId + `",
 	type:"` + bc.contentType + `"
 	}`)
 	if result, err := bc.vm.Run("JSON.stringify(compute(data,oldData,context),null,'\t')"); err != nil {
@@ -116,7 +115,7 @@ func (bc *businessContext) beforePost(input string) string {
 
 func (bc *businessContext) afterPost(input string) string {
 	bc.vm.Run(`var context = {
-	id:"` + strconv.Itoa(bc.newId) + `",
+	id:"` + bc.newId + `",
 	type:"` + bc.contentType + `"
 	}`)
 	bc.vm.Run("var data = " + input)
@@ -138,7 +137,7 @@ func (bc *businessContext) afterPut(input string, oldData string) string {
 	bc.vm.Run("var data = " + input)
 	bc.vm.Run("var oldData = " + oldData)
 	bc.vm.Run(`var context = {
-	id:"` + strconv.Itoa(bc.newId) + `",
+	id:"` + bc.newId + `",
 	type:"` + bc.contentType + `"
 	}`)
 	if result, err := bc.vm.Run("JSON.stringify(afterPut(data,oldData,context),null,'\t')"); err != nil {
@@ -147,6 +146,42 @@ func (bc *businessContext) afterPut(input string, oldData string) string {
 	} else {
 		return result.String()
 	}
+}
+
+func (bc *businessContext) generateId(data string) string {
+	path := bc.rootBusiness + "/" + bc.contentType + "/generateId.js"
+	if script, err := ioutil.ReadFile(path); err == nil {
+		bc.vm.Run(string(script))
+	} else {
+		log.Print(err)
+		return bc.generateIdFromSequence()
+	}
+
+	bc.vm.Run("var data = " + data)
+	if result, err := bc.vm.Run("generateId(data)"); err != nil {
+		log.Print(path, err)
+		return bc.generateIdFromSequence()
+	} else {
+		bc.newId = result.String()
+		return bc.newId
+	}
+}
+
+func (bc *businessContext) generateIdFromSequence() string {
+	seqFileName := bc.rootUser + bc.requestURI + "sequence.json"
+	seqdat, err := ioutil.ReadFile(seqFileName)
+	var seq Sequence
+	if err != nil {
+		log.Print(seqFileName + "sequence.json not found, generating new one")
+	} else {
+		json.Unmarshal(seqdat, &seq)
+	}
+	nextId := seq.NextId
+	seq.NextId++
+	seqdat, _ = json.Marshal(&seq)
+	ioutil.WriteFile(seqFileName, seqdat, os.ModePerm)
+	bc.newId = strconv.Itoa(nextId)
+	return bc.newId
 }
 
 func runScript(vm *otto.Otto, input, path, execution string) string {
