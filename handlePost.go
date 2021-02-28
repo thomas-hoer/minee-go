@@ -11,7 +11,7 @@ type sequence struct {
 	NextID int `json:"nextId"`
 }
 
-func (handler *storageHandler) handlePostUser(resp http.ResponseWriter, req *http.Request) {
+func (handler *Minee) handlePostUser(resp http.ResponseWriter, req *http.Request) {
 	filename := handler.user + req.RequestURI
 	fileInfo, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -45,7 +45,7 @@ func (handler *storageHandler) handlePostUser(resp http.ResponseWriter, req *htt
 	resp.WriteHeader(201)
 }
 
-func (handler *storageHandler) handlePutUser(resp http.ResponseWriter, req *http.Request) {
+func (handler *Minee) handlePutUser(resp http.ResponseWriter, req *http.Request) {
 	filename := handler.user + req.RequestURI
 	fileInfo, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -72,7 +72,7 @@ func (handler *storageHandler) handlePutUser(resp http.ResponseWriter, req *http
 	resp.WriteHeader(204)
 }
 
-func (handler *storageHandler) handlePatchUser(resp http.ResponseWriter, req *http.Request) {
+func (handler *Minee) handlePatchUser(resp http.ResponseWriter, req *http.Request) {
 	filename := handler.user + req.RequestURI
 	fileInfo, err := os.Stat(filename)
 	if os.IsNotExist(err) {

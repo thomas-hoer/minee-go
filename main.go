@@ -3,8 +3,8 @@ package minee
 import (
 	"log"
 	"net/http"
+	"os"
 	"strings"
-	"time"
 )
 
 // Minee is a webservice, which can be used to crate a resiliant microservice
@@ -12,6 +12,25 @@ import (
 type Minee struct {
 	Port        string
 	LogRequests bool
+	static      *staticProvider
+	business    string
+	user        string
+}
+
+type staticProvider struct {
+	root  string
+	cache map[string][]byte
+}
+
+func (s *staticProvider) Get(name string) *[]byte {
+	if val, ok := s.cache[name]; ok {
+		return &val
+	} else if fileInfo, err := os.Stat(s.root + name); err == nil && !fileInfo.IsDir() {
+		dat, _ := os.ReadFile(s.root + name)
+		s.cache[name] = dat
+		return &dat
+	}
+	return nil
 }
 
 // New creates a new minee instance.
@@ -23,6 +42,12 @@ func New() *Minee {
 	return &Minee{
 		Port:        ":80",
 		LogRequests: true,
+		static: &staticProvider{
+			root:  "static",
+			cache: make(map[string][]byte),
+		},
+		business: "data/business",
+		user:     "data/user",
 	}
 }
 
@@ -35,16 +60,9 @@ func (minee *Minee) init() {
 // The method is blocking. You can use it directly in your main function.
 func (minee *Minee) Start() {
 	minee.init()
-	sh := &storageHandler{
-		static:   "data/static",
-		business: "data/business",
-		user:     "data/user",
-	}
 	server := http.Server{
-		Addr:         minee.Port,
-		Handler:      handleMiddleware(gzipper(sh), minee.LogRequests),
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:    minee.Port,
+		Handler: handleMiddleware(gzipper(minee), minee.LogRequests),
 	}
 
 	log.Fatal(server.ListenAndServe())
@@ -62,13 +80,8 @@ type businessInfo struct {
 	// Component
 	// Page
 }
-type storageHandler struct {
-	static   string
-	business string
-	user     string
-}
 
-func (handler *storageHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+func (handler *Minee) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	splits := strings.Split(req.RequestURI, "?")
 	requestURI := splits[0]
 	var queryParam string = ""

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func (handler *storageHandler) handleGetUser(resp http.ResponseWriter, requestURI, queryParam string) {
+func (handler *Minee) handleGetUser(resp http.ResponseWriter, requestURI, queryParam string) {
 	filename := handler.user + requestURI
 	fileInfo, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -26,7 +26,7 @@ func (handler *storageHandler) handleGetUser(resp http.ResponseWriter, requestUR
 		resp.Write(dat)
 	}
 }
-func (handler *storageHandler) handleGetIndex(resp http.ResponseWriter, base, requestURI, queryParam string) {
+func (handler *Minee) handleGetIndex(resp http.ResponseWriter, base, requestURI, queryParam string) {
 	fileInfos, _ := ioutil.ReadDir(base + requestURI)
 	names := make([]string, 0)
 	for _, fileInfo := range fileInfos {
@@ -45,8 +45,7 @@ func (handler *storageHandler) handleGetIndex(resp http.ResponseWriter, base, re
 		resp.Write([]byte("'use strict';\nconst data=" + jsonOutput + "\nexport {data}"))
 	} else {
 		resp.Header().Add("Content-Type", "text/html")
-		data, _ := ioutil.ReadFile(handler.static + "/index.html")
-		resp.Write(data)
+		resp.Write(*handler.static.Get("/index.html"))
 	}
 }
 func contains(list []string, stringToFind string) bool {
@@ -57,7 +56,7 @@ func contains(list []string, stringToFind string) bool {
 	}
 	return false
 }
-func (handler *storageHandler) handleGetType(resp http.ResponseWriter, requestURI, queryParam string) {
+func (handler *Minee) handleGetType(resp http.ResponseWriter, requestURI, queryParam string) {
 	typefile := filepath.Dir(handler.user+requestURI) + "/type"
 	if fileInfo, err := os.Stat(typefile); err == nil && !fileInfo.IsDir() {
 		dat, _ := ioutil.ReadFile(typefile)
@@ -74,15 +73,14 @@ func (handler *storageHandler) handleGetType(resp http.ResponseWriter, requestUR
 		handler.handleGetStatic(resp, requestURI, queryParam)
 	}
 }
-func (handler *storageHandler) handleGetStatic(resp http.ResponseWriter, requestURI, queryParam string) {
-	if fileInfo, err := os.Stat(handler.static + requestURI); err == nil && !fileInfo.IsDir() {
-		dat, _ := ioutil.ReadFile(handler.static + requestURI)
-		resp.Write(dat)
+func (handler *Minee) handleGetStatic(resp http.ResponseWriter, requestURI, queryParam string) {
+	if dat := handler.static.Get(requestURI); dat != nil {
+		resp.Write(*dat)
 	} else {
 		handler.handleGetBusiness(resp, requestURI, queryParam)
 	}
 }
-func (handler *storageHandler) handleGetBusiness(resp http.ResponseWriter, requestURI, queryParam string) {
+func (handler *Minee) handleGetBusiness(resp http.ResponseWriter, requestURI, queryParam string) {
 	if fileInfo, err := os.Stat(handler.business + requestURI); err == nil {
 		if !fileInfo.IsDir() {
 			dat, _ := ioutil.ReadFile(handler.business + requestURI)

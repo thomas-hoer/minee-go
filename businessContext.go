@@ -18,7 +18,7 @@ type businessContext struct {
 	relocate     string
 }
 
-func (handler *storageHandler) getBusinessContext(requestURI string) *businessContext {
+func (handler *Minee) getBusinessContext(requestURI string) *businessContext {
 	bc := &businessContext{
 		requestURI:   requestURI,
 		targetURI:    requestURI,
