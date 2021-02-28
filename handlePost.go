@@ -1,4 +1,4 @@
-package main
+package minee
 
 import (
 	"io/ioutil"
@@ -8,7 +8,7 @@ import (
 )
 
 type Sequence struct {
-	NextId int `json:"nextId"`
+	NextID int `json:"nextId"`
 }
 
 func (handler *StorageHandler) handlePostUser(resp http.ResponseWriter, req *http.Request) {
@@ -33,19 +33,15 @@ func (handler *StorageHandler) handlePostUser(resp http.ResponseWriter, req *htt
 	newData, _ := ioutil.ReadAll(req.Body)
 	newDataString := string(newData)
 
-	newId := bc.generateId(newDataString)
+	newID := bc.generateID(newDataString)
 
-	newPath := filename + newId + "/"
-	bc.setTargetURI(req.RequestURI + newId + "/")
+	newPath := filename + newID + "/"
+	bc.setTargetURI(req.RequestURI + newID + "/")
 
 	os.MkdirAll(newPath, os.ModePerm)
 	ioutil.WriteFile(newPath+"type", []byte(*dataType), os.ModePerm)
-	oldDataString := "null"
-	newDataString = bc.beforePost(newDataString)
-	newDataString = bc.compute(newDataString, oldDataString)
-	newDataString = bc.afterPost(newDataString)
 	ioutil.WriteFile(newPath+"data.json", []byte(newDataString), os.ModePerm)
-	resp.Header().Add("Location", req.RequestURI+newId+"/"+bc.relocate)
+	resp.Header().Add("Location", req.RequestURI+newID+"/"+bc.relocate)
 	resp.WriteHeader(201)
 }
 
@@ -72,9 +68,6 @@ func (handler *StorageHandler) handlePutUser(resp http.ResponseWriter, req *http
 		ioutil.WriteFile(filename+"type", []byte(*dataType), os.ModePerm)
 		bc.setContentType(*dataType)
 	}
-	oldDataString := readAsJsString(filename + "data.json")
-	newDataString = bc.compute(newDataString, oldDataString)
-	newDataString = bc.afterPut(newDataString, oldDataString)
 	ioutil.WriteFile(filename+"data.json", []byte(newDataString), os.ModePerm)
 	resp.WriteHeader(204)
 }
@@ -111,10 +104,8 @@ func (handler *StorageHandler) handlePatchUser(resp http.ResponseWriter, req *ht
 func readAsJsString(path string) string {
 	if dat, err := ioutil.ReadFile(path); err == nil {
 		return string(dat)
-	} else {
-		return "null"
 	}
-
+	return "null"
 }
 func typeOf(req *http.Request) *string {
 	ct := strings.Split(req.Header.Get("Content-Type"), "/")
