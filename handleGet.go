@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func (handler *StorageHandler) handleGetUser(resp http.ResponseWriter, requestURI, queryParam string) {
+func (handler *storageHandler) handleGetUser(resp http.ResponseWriter, requestURI, queryParam string) {
 	filename := handler.user + requestURI
 	fileInfo, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -26,7 +26,7 @@ func (handler *StorageHandler) handleGetUser(resp http.ResponseWriter, requestUR
 		resp.Write(dat)
 	}
 }
-func (handler *StorageHandler) handleGetIndex(resp http.ResponseWriter, base, requestURI, queryParam string) {
+func (handler *storageHandler) handleGetIndex(resp http.ResponseWriter, base, requestURI, queryParam string) {
 	fileInfos, _ := ioutil.ReadDir(base + requestURI)
 	names := make([]string, 0)
 	for _, fileInfo := range fileInfos {
@@ -57,7 +57,7 @@ func contains(list []string, stringToFind string) bool {
 	}
 	return false
 }
-func (handler *StorageHandler) handleGetType(resp http.ResponseWriter, requestURI, queryParam string) {
+func (handler *storageHandler) handleGetType(resp http.ResponseWriter, requestURI, queryParam string) {
 	typefile := filepath.Dir(handler.user+requestURI) + "/type"
 	if fileInfo, err := os.Stat(typefile); err == nil && !fileInfo.IsDir() {
 		dat, _ := ioutil.ReadFile(typefile)
@@ -74,7 +74,7 @@ func (handler *StorageHandler) handleGetType(resp http.ResponseWriter, requestUR
 		handler.handleGetStatic(resp, requestURI, queryParam)
 	}
 }
-func (handler *StorageHandler) handleGetStatic(resp http.ResponseWriter, requestURI, queryParam string) {
+func (handler *storageHandler) handleGetStatic(resp http.ResponseWriter, requestURI, queryParam string) {
 	if fileInfo, err := os.Stat(handler.static + requestURI); err == nil && !fileInfo.IsDir() {
 		dat, _ := ioutil.ReadFile(handler.static + requestURI)
 		resp.Write(dat)
@@ -82,7 +82,7 @@ func (handler *StorageHandler) handleGetStatic(resp http.ResponseWriter, request
 		handler.handleGetBusiness(resp, requestURI, queryParam)
 	}
 }
-func (handler *StorageHandler) handleGetBusiness(resp http.ResponseWriter, requestURI, queryParam string) {
+func (handler *storageHandler) handleGetBusiness(resp http.ResponseWriter, requestURI, queryParam string) {
 	if fileInfo, err := os.Stat(handler.business + requestURI); err == nil {
 		if !fileInfo.IsDir() {
 			dat, _ := ioutil.ReadFile(handler.business + requestURI)
@@ -94,10 +94,10 @@ func (handler *StorageHandler) handleGetBusiness(resp http.ResponseWriter, reque
 	}
 
 	root := filepath.Dir(handler.business + requestURI)
-	businessInfo := root + "/info.json"
-	if fileInfo, err := os.Stat(businessInfo); err == nil && !fileInfo.IsDir() {
-		dat, _ := ioutil.ReadFile(businessInfo)
-		var bi BusinessInfo
+	businessInfoFilename := root + "/info.json"
+	if fileInfo, err := os.Stat(businessInfoFilename); err == nil && !fileInfo.IsDir() {
+		dat, _ := ioutil.ReadFile(businessInfoFilename)
+		var bi businessInfo
 		json.Unmarshal(dat, &bi)
 		if bi.CurrentVersion != "" {
 			filename := filepath.Base(handler.user + requestURI)

@@ -7,58 +7,50 @@ import (
 	"time"
 )
 
-const logRequests bool = true
-const port string = ":8080"
+// Minee is a webservice, which can be used to crate a resiliant microservice
+// including a pwa single page application.
+type Minee struct {
+	Port        string
+	LogRequests bool
+}
 
-func main() {
+// New creates a new minee instance.
+//
+// The instance is preconfigured for a fast start in development mode. For
+// example it uses http on port 80. In production mode you should use https on
+// port 443.
+func New() *Minee {
+	return &Minee{
+		Port:        ":80",
+		LogRequests: true,
+	}
+}
 
-	sh := &StorageHandler{
+func (minee *Minee) init() {
+
+}
+
+// Start starts the webservice.
+//
+// The method is blocking. You can use it directly in your main function.
+func (minee *Minee) Start() {
+	minee.init()
+	sh := &storageHandler{
 		static:   "data/static",
 		business: "data/business",
 		user:     "data/user",
 	}
-	http.Handle("/", handleMiddleware(Gzip(sh)))
-	log.Fatal(http.ListenAndServe(port, nil))
+	server := http.Server{
+		Addr:         minee.Port,
+		Handler:      handleMiddleware(gzipper(sh), minee.LogRequests),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	log.Fatal(server.ListenAndServe())
 }
 
-func handleMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		var caching bool = true
-		if strings.HasSuffix(r.RequestURI, ".css") {
-			w.Header().Add("Content-Type", "text/css")
-		} else if strings.HasSuffix(r.RequestURI, ".html") {
-			w.Header().Add("Content-Type", "text/html")
-		} else if strings.HasSuffix(r.RequestURI, "/static/") {
-			w.Header().Add("Content-Type", "text/html")
-		} else if strings.HasSuffix(r.RequestURI, ".ico") {
-			w.Header().Add("Content-Type", "image/x-icon")
-		} else if strings.HasSuffix(r.RequestURI, ".png") {
-			w.Header().Add("Content-Type", "image/png")
-		} else if strings.HasSuffix(r.RequestURI, ".jpg") {
-			w.Header().Add("Content-Type", "image/jpeg")
-		} else if strings.HasSuffix(r.RequestURI, ".js") {
-			w.Header().Add("Content-Type", "application/javascript")
-		} else if strings.HasSuffix(r.RequestURI, "json") { // .json or ?json
-			caching = false
-			w.Header().Add("Content-Type", "application/json")
-		} else if !strings.HasSuffix(r.RequestURI, "/") {
-			caching = false
-		} else {
-			caching = false
-		}
-		if caching {
-			w.Header().Add("Cache-Control", "public, max-age=2592000") //30 days
-		}
-		next.ServeHTTP(w, r)
-		if logRequests {
-			elapsed := time.Since(start)
-			log.Printf("%v %v took %v", r.Method, r.RequestURI, elapsed)
-		}
-	})
-}
-
-type BusinessInfo struct {
+type businessInfo struct {
 	Name           string   `json:"name"`
 	Instanceable   bool     `json:"instanceable"`
 	Allow          []string `json:"allow"` // Allow other Business Types as Child
@@ -70,13 +62,13 @@ type BusinessInfo struct {
 	// Component
 	// Page
 }
-type StorageHandler struct {
+type storageHandler struct {
 	static   string
 	business string
 	user     string
 }
 
-func (handler *StorageHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+func (handler *storageHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	splits := strings.Split(req.RequestURI, "?")
 	requestURI := splits[0]
 	var queryParam string = ""

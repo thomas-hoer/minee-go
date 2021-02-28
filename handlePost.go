@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-type Sequence struct {
+type sequence struct {
 	NextID int `json:"nextId"`
 }
 
-func (handler *StorageHandler) handlePostUser(resp http.ResponseWriter, req *http.Request) {
+func (handler *storageHandler) handlePostUser(resp http.ResponseWriter, req *http.Request) {
 	filename := handler.user + req.RequestURI
 	fileInfo, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -45,7 +45,7 @@ func (handler *StorageHandler) handlePostUser(resp http.ResponseWriter, req *htt
 	resp.WriteHeader(201)
 }
 
-func (handler *StorageHandler) handlePutUser(resp http.ResponseWriter, req *http.Request) {
+func (handler *storageHandler) handlePutUser(resp http.ResponseWriter, req *http.Request) {
 	filename := handler.user + req.RequestURI
 	fileInfo, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -72,7 +72,7 @@ func (handler *StorageHandler) handlePutUser(resp http.ResponseWriter, req *http
 	resp.WriteHeader(204)
 }
 
-func (handler *StorageHandler) handlePatchUser(resp http.ResponseWriter, req *http.Request) {
+func (handler *storageHandler) handlePatchUser(resp http.ResponseWriter, req *http.Request) {
 	filename := handler.user + req.RequestURI
 	fileInfo, err := os.Stat(filename)
 	if os.IsNotExist(err) {

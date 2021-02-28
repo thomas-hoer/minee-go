@@ -18,7 +18,7 @@ type businessContext struct {
 	relocate     string
 }
 
-func (handler *StorageHandler) getBusinessContext(requestURI string) *businessContext {
+func (handler *storageHandler) getBusinessContext(requestURI string) *businessContext {
 	bc := &businessContext{
 		requestURI:   requestURI,
 		targetURI:    requestURI,
@@ -46,7 +46,7 @@ func (bc *businessContext) generateID(data string) string {
 func (bc *businessContext) generateIDFromSequence() string {
 	seqFileName := bc.rootUser + bc.requestURI + "sequence.json"
 	seqdat, err := ioutil.ReadFile(seqFileName)
-	var seq Sequence
+	var seq sequence
 	if err != nil {
 		log.Print(seqFileName + "sequence.json not found, generating new one")
 	} else {
