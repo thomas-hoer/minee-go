@@ -4,33 +4,20 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 // Minee is a webservice, which can be used to crate a resiliant microservice
 // including a pwa single page application.
 type Minee struct {
-	Port        string
-	LogRequests bool
-	static      *staticProvider
-	business    string
-	user        string
-}
-
-type staticProvider struct {
-	root  string
-	cache map[string][]byte
-}
-
-func (s *staticProvider) Get(name string) *[]byte {
-	if val, ok := s.cache[name]; ok {
-		return &val
-	} else if fileInfo, err := os.Stat(s.root + name); err == nil && !fileInfo.IsDir() {
-		dat, _ := os.ReadFile(s.root + name)
-		s.cache[name] = dat
-		return &dat
-	}
-	return nil
+	Port          string
+	LogRequests   bool
+	static        *staticProvider
+	entities      map[string]*BusinessEntity
+	businessRoots map[string]*BusinessEntity
+	business      string
+	user          string
 }
 
 // New creates a new minee instance.
@@ -43,16 +30,13 @@ func New() *Minee {
 		Port:        ":80",
 		LogRequests: true,
 		static: &staticProvider{
-			root:  "static",
-			cache: make(map[string][]byte),
+			root: "static",
 		},
-		business: "data/business",
-		user:     "data/user",
+		entities:      make(map[string]*BusinessEntity),
+		businessRoots: make(map[string]*BusinessEntity),
+		business:      "data/business",
+		user:          "data/user",
 	}
-}
-
-func (minee *Minee) init() {
-
 }
 
 // Start starts the webservice.
@@ -68,6 +52,15 @@ func (minee *Minee) Start() {
 	log.Fatal(server.ListenAndServe())
 }
 
+func (minee *Minee) AddType(be *BusinessEntity) {
+	minee.entities[be.Type] = be
+	minee.businessRoots[be.ContextRoot] = be
+}
+
+func (minee *Minee) init() {
+	minee.static.init()
+}
+
 type businessInfo struct {
 	Name           string   `json:"name"`
 	Instanceable   bool     `json:"instanceable"`
@@ -81,23 +74,131 @@ type businessInfo struct {
 	// Page
 }
 
-func (handler *Minee) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+type staticResource struct {
+	data []byte
+}
+
+func (res *staticResource) get(resp http.ResponseWriter) {
+	resp.Write(res.data)
+}
+func (res *staticResource) post(resp http.ResponseWriter, _ []byte) {
+	resp.Header().Set("Allow", "GET")
+	resp.WriteHeader(405)
+}
+func (res *staticResource) put(resp http.ResponseWriter, _ []byte) {
+	resp.Header().Set("Allow", "GET")
+	resp.WriteHeader(405)
+}
+
+type statusCodeResource struct {
+	statusCode int
+	location   string
+}
+
+func (res *statusCodeResource) get(resp http.ResponseWriter) {
+	resp.WriteHeader(res.statusCode)
+	if res.statusCode == 301 {
+		resp.Header().Add("Location", res.location)
+	}
+}
+func (res *statusCodeResource) post(resp http.ResponseWriter, _ []byte) {
+	resp.WriteHeader(res.statusCode)
+}
+func (res *statusCodeResource) put(resp http.ResponseWriter, _ []byte) {
+	resp.WriteHeader(res.statusCode)
+}
+
+type businessResource struct {
+	data []byte
+}
+
+func (res *businessResource) get(resp http.ResponseWriter) {
+	resp.Write(res.data)
+}
+func (res *businessResource) post(resp http.ResponseWriter, _ []byte) {
+	resp.Header().Set("Allow", "GET")
+	resp.WriteHeader(405)
+}
+func (res *businessResource) put(resp http.ResponseWriter, _ []byte) {
+	resp.Header().Set("Allow", "GET")
+	resp.WriteHeader(405)
+}
+
+type userResource struct {
+	data     []byte
+	location string
+}
+
+func (res *userResource) get(resp http.ResponseWriter) {
+	resp.Write(res.data)
+}
+func (res *userResource) post(resp http.ResponseWriter, _ []byte) {
+	resp.Header().Set("Allow", "GET")
+	resp.WriteHeader(405)
+}
+func (res *userResource) put(resp http.ResponseWriter, _ []byte) {
+	resp.Header().Set("Allow", "GET")
+	resp.WriteHeader(405)
+}
+
+type resource interface {
+	get(http.ResponseWriter)
+	post(http.ResponseWriter, []byte)
+	put(http.ResponseWriter, []byte)
+}
+
+func (minee *Minee) getResource(requestURI string) resource {
+	if dat := minee.static.Get(requestURI); dat != nil {
+		return &staticResource{data: dat}
+	}
+	path := filepath.ToSlash(filepath.Dir(requestURI))
+	if bi, ok := minee.businessRoots[path]; ok {
+		if strings.HasSuffix(requestURI, "/") {
+			return &businessResource{data: minee.static.Get("/index.html")}
+		}
+		base := filepath.Base(requestURI)
+		if base == "page.js" && bi.Page != nil {
+			dat, _ := os.ReadFile(minee.business + bi.Page.FileName)
+			return &staticResource{data: dat}
+		}
+	}
+
+	filename := minee.user + requestURI
+	fileInfo, err := os.Stat(filename)
+	if !os.IsNotExist(err) {
+		if fileInfo.IsDir() {
+			if strings.HasSuffix(filename, "/") {
+				return &staticResource{data: minee.static.Get("/index.html")}
+			}
+			return &statusCodeResource{
+				statusCode: 301,
+				location:   requestURI + "/",
+			}
+		}
+		dat, _ := os.ReadFile(filename)
+		return &userResource{data: dat}
+	}
+	typePath := filepath.Dir(filename) + "/type"
+	if _, err := os.Stat(typePath); err == nil {
+		dat, _ := os.ReadFile(typePath)
+		typeName := string(dat)
+		if bi, ok := minee.entities[typeName]; ok {
+			return &userResource{
+				location: bi.ContextRoot + "/" + filepath.Base(requestURI),
+			}
+		}
+	}
+	return &statusCodeResource{statusCode: 404}
+}
+
+func (minee *Minee) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	splits := strings.Split(req.RequestURI, "?")
 	requestURI := splits[0]
-	var queryParam string = ""
-	if len(splits) > 1 {
-		queryParam = splits[1]
-	}
-	if req.Method == "GET" {
-		handler.handleGetUser(resp, requestURI, queryParam)
-	} else if req.Method == "POST" {
-		handler.handlePostUser(resp, req)
-	} else if req.Method == "PUT" {
-		handler.handlePutUser(resp, req)
-	} else if req.Method == "PATCH" {
-		handler.handlePatchUser(resp, req)
-	} else {
-		resp.Header().Set("Allow", "GET, POST")
-		resp.WriteHeader(405)
-	}
+	//var queryParam string = ""
+	//if len(splits) > 1 {
+	//	queryParam = splits[1]
+	//}
+
+	resource := minee.getResource(requestURI)
+	resource.get(resp)
 }

@@ -33,10 +33,7 @@ func gzipper(handler http.Handler) http.Handler {
 
 func handleMiddleware(next http.Handler, logRequests bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if logRequests {
-			start := time.Now()
-			defer log.Printf("%v %v took %v", r.Method, r.RequestURI, time.Since(start))
-		}
+		start := time.Now()
 		var caching bool = true
 		if strings.HasSuffix(r.RequestURI, ".css") {
 			w.Header().Add("Content-Type", "text/css")
@@ -64,5 +61,8 @@ func handleMiddleware(next http.Handler, logRequests bool) http.Handler {
 			w.Header().Add("Cache-Control", "public, max-age=2592000") //30 days
 		}
 		next.ServeHTTP(w, r)
+		if logRequests {
+			log.Printf("%v %v took %v", r.Method, r.RequestURI, time.Since(start))
+		}
 	})
 }
