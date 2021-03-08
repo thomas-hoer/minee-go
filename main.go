@@ -1,6 +1,7 @@
 package minee
 
 import (
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -52,6 +53,7 @@ func (minee *Minee) Start() {
 	log.Fatal(server.ListenAndServe())
 }
 
+// AddType adds a BusinessEntity to the webservice.
 func (minee *Minee) AddType(be *BusinessEntity) {
 	minee.entities[be.Type] = be
 	minee.businessRoots[be.ContextRoot] = be
@@ -81,11 +83,11 @@ type staticResource struct {
 func (res *staticResource) get(resp http.ResponseWriter) {
 	resp.Write(res.data)
 }
-func (res *staticResource) post(resp http.ResponseWriter, _ []byte) {
+func (res *staticResource) post(resp http.ResponseWriter, _ []byte, _ map[string][]string) {
 	resp.Header().Set("Allow", "GET")
 	resp.WriteHeader(405)
 }
-func (res *staticResource) put(resp http.ResponseWriter, _ []byte) {
+func (res *staticResource) put(resp http.ResponseWriter, _ []byte, _ map[string][]string) {
 	resp.Header().Set("Allow", "GET")
 	resp.WriteHeader(405)
 }
@@ -101,50 +103,76 @@ func (res *statusCodeResource) get(resp http.ResponseWriter) {
 		resp.Header().Add("Location", res.location)
 	}
 }
-func (res *statusCodeResource) post(resp http.ResponseWriter, _ []byte) {
+func (res *statusCodeResource) post(resp http.ResponseWriter, _ []byte, _ map[string][]string) {
 	resp.WriteHeader(res.statusCode)
 }
-func (res *statusCodeResource) put(resp http.ResponseWriter, _ []byte) {
+func (res *statusCodeResource) put(resp http.ResponseWriter, _ []byte, _ map[string][]string) {
 	resp.WriteHeader(res.statusCode)
 }
 
 type businessResource struct {
-	data []byte
+	data       []byte
+	bi         *BusinessEntity
+	minee      *Minee
+	requestURI string
 }
 
 func (res *businessResource) get(resp http.ResponseWriter) {
 	resp.Write(res.data)
 }
-func (res *businessResource) post(resp http.ResponseWriter, _ []byte) {
-	resp.Header().Set("Allow", "GET")
-	resp.WriteHeader(405)
+
+func getFirst(headerParam map[string][]string, key string) string {
+	if param, ok := headerParam[key]; ok {
+		if len(param) >= 1 {
+			return param[0]
+		}
+	}
+	return ""
 }
-func (res *businessResource) put(resp http.ResponseWriter, _ []byte) {
-	resp.Header().Set("Allow", "GET")
-	resp.WriteHeader(405)
+func contentTypeToBusinessType(contentType string) string {
+	splits := strings.Split(contentType, "/")
+	if len(splits) == 2 {
+		return strings.ReplaceAll(splits[1], ".", "/")
+	}
+	return ""
 }
 
-type userResource struct {
-	data     []byte
-	location string
+func (res *businessResource) post(resp http.ResponseWriter, data []byte, headerParam map[string][]string) {
+	businessType := contentTypeToBusinessType(getFirst(headerParam, "Content-Type"))
+	if res.bi.AllowedSubTypes.contains(businessType) {
+		createType := res.minee.entities[businessType]
+		object, err := createType.Unmarshal(data)
+		if err != nil {
+			log.Print(err)
+			return
+		}
+		context := Context{}
+		objectPost, key := res.bi.OnPostBefore(context, object)
+		dataToWrite, err := createType.Marshal(objectPost)
+		if err != nil {
+			log.Print(err)
+			return
+		}
+		fileName := res.minee.user + res.requestURI + key + "/data.json"
+		os.MkdirAll(filepath.Dir(fileName), os.ModePerm)
+		if err := os.WriteFile(fileName, dataToWrite, os.ModePerm); err != nil {
+			resp.WriteHeader(500)
+		} else {
+			resp.WriteHeader(201)
+		}
+	} else {
+		resp.WriteHeader(415)
+	}
 }
-
-func (res *userResource) get(resp http.ResponseWriter) {
-	resp.Write(res.data)
-}
-func (res *userResource) post(resp http.ResponseWriter, _ []byte) {
-	resp.Header().Set("Allow", "GET")
-	resp.WriteHeader(405)
-}
-func (res *userResource) put(resp http.ResponseWriter, _ []byte) {
+func (res *businessResource) put(resp http.ResponseWriter, _ []byte, headerParam map[string][]string) {
 	resp.Header().Set("Allow", "GET")
 	resp.WriteHeader(405)
 }
 
 type resource interface {
 	get(http.ResponseWriter)
-	post(http.ResponseWriter, []byte)
-	put(http.ResponseWriter, []byte)
+	post(http.ResponseWriter, []byte, map[string][]string)
+	put(http.ResponseWriter, []byte, map[string][]string)
 }
 
 func (minee *Minee) getResource(requestURI string) resource {
@@ -154,7 +182,12 @@ func (minee *Minee) getResource(requestURI string) resource {
 	path := filepath.ToSlash(filepath.Dir(requestURI))
 	if bi, ok := minee.businessRoots[path]; ok {
 		if strings.HasSuffix(requestURI, "/") {
-			return &businessResource{data: minee.static.Get("/index.html")}
+			return &businessResource{
+				bi:         bi,
+				data:       minee.static.Get("/index.html"),
+				minee:      minee,
+				requestURI: requestURI,
+			}
 		}
 		base := filepath.Base(requestURI)
 		if base == "page.js" && bi.Page != nil {
@@ -164,6 +197,7 @@ func (minee *Minee) getResource(requestURI string) resource {
 	}
 
 	filename := minee.user + requestURI
+	typeName := getType(filepath.Dir(filename) + "/type")
 	fileInfo, err := os.Stat(filename)
 	if !os.IsNotExist(err) {
 		if fileInfo.IsDir() {
@@ -176,21 +210,35 @@ func (minee *Minee) getResource(requestURI string) resource {
 			}
 		}
 		dat, _ := os.ReadFile(filename)
-		return &userResource{data: dat}
+		if typeName == nil {
+			return &staticResource{data: dat}
+		}
+		if bi, ok := minee.entities[*typeName]; ok {
+			return &businessResource{
+				bi:         bi,
+				data:       dat,
+				minee:      minee,
+				requestURI: requestURI,
+			}
+		}
 	}
-	typePath := filepath.Dir(filename) + "/type"
-	if _, err := os.Stat(typePath); err == nil {
-		dat, _ := os.ReadFile(typePath)
-		typeName := string(dat)
-		if bi, ok := minee.entities[typeName]; ok {
-			return &userResource{
-				location: bi.ContextRoot + "/" + filepath.Base(requestURI),
+	if typeName != nil {
+		if bi, ok := minee.entities[*typeName]; ok {
+			return &statusCodeResource{
+				statusCode: 301,
+				location:   bi.ContextRoot + "/" + filepath.Base(requestURI),
 			}
 		}
 	}
 	return &statusCodeResource{statusCode: 404}
 }
-
+func getType(typePath string) *string {
+	if dat, err := os.ReadFile(typePath); err == nil {
+		typeName := string(dat)
+		return &typeName
+	}
+	return nil
+}
 func (minee *Minee) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	splits := strings.Split(req.RequestURI, "?")
 	requestURI := splits[0]
@@ -200,5 +248,15 @@ func (minee *Minee) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	//}
 
 	resource := minee.getResource(requestURI)
-	resource.get(resp)
+	if req.Method == "GET" {
+		resource.get(resp)
+	} else if req.Method == "POST" {
+		dat, _ := io.ReadAll(req.Body)
+		resource.post(resp, dat, req.Header)
+	} else if req.Method == "PUT" {
+		dat, _ := io.ReadAll(req.Body)
+		resource.put(resp, dat, req.Header)
+	} else {
+		resp.WriteHeader(404)
+	}
 }

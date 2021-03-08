@@ -7,6 +7,16 @@ type Component struct {
 }
 type Context struct {
 }
+type allowedSubTypes []string
+
+func (sub allowedSubTypes) contains(subType string) bool {
+	for _, element := range sub {
+		if element == subType {
+			return true
+		}
+	}
+	return false
+}
 
 type BusinessEntity struct {
 	Name            string
@@ -15,7 +25,7 @@ type BusinessEntity struct {
 	ContextRoot     string
 	Page            *Page
 	Component       *Component
-	AllowedSubTypes []string
+	AllowedSubTypes allowedSubTypes
 
 	Unmarshal     func([]byte) (interface{}, error)
 	Marshal       func(interface{}) ([]byte, error)
