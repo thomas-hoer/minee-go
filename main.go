@@ -1,6 +1,7 @@
 package minee
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -54,9 +55,13 @@ func (minee *Minee) Start() {
 }
 
 // AddType adds a BusinessEntity to the webservice.
-func (minee *Minee) AddType(be *BusinessEntity) {
+func (minee *Minee) AddType(be *BusinessEntity) error {
+	if len(be.AllowedSubTypes) != 0 && be.OnPostBefore == nil {
+		return errors.New("BusinessEntity with non empty AllowedSubTypes must provide a OnPostBefore function")
+	}
 	minee.entities[be.Type] = be
 	minee.businessRoots[be.ContextRoot] = be
+	return nil
 }
 
 func (minee *Minee) init() {
@@ -147,8 +152,18 @@ func (res *businessResource) post(resp http.ResponseWriter, data []byte, headerP
 			return
 		}
 		context := Context{}
-		objectPost, key := res.bi.OnPostBefore(context, object)
-		dataToWrite, err := createType.Marshal(objectPost)
+		object, key := res.bi.OnPostBefore(context, object)
+		resp.Header().Add("id", key)
+		if res.bi.OnPostCompute != nil {
+			object = res.bi.OnPostCompute(context, object)
+		}
+		if createType.OnPostCompute != nil {
+			object = createType.OnPostCompute(context, object)
+		}
+		if createType.OnPostAfter != nil {
+			object = createType.OnPostAfter(context, object)
+		}
+		dataToWrite, err := createType.Marshal(object)
 		if err != nil {
 			log.Print(err)
 			return
