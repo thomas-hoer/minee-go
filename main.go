@@ -2,12 +2,14 @@ package minee
 
 import (
 	"errors"
-	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Minee is a webservice, which can be used to crate a resiliant microservice
@@ -20,6 +22,11 @@ type Minee struct {
 	businessRoots map[string]*BusinessEntity
 	business      string
 	user          string
+	authenticator func(session string) *string
+}
+
+func (minee *Minee) Authenticator(authenticator func(session string) *string) {
+	minee.authenticator = authenticator
 }
 
 // New creates a new minee instance.
@@ -45,7 +52,9 @@ func New() *Minee {
 //
 // The method is blocking. You can use it directly in your main function.
 func (minee *Minee) Start() {
-	minee.init()
+	if err := minee.init(); err != nil {
+		log.Fatal(err)
+	}
 	server := http.Server{
 		Addr:    minee.Port,
 		Handler: handleMiddleware(gzipper(minee), minee.LogRequests),
@@ -64,130 +73,8 @@ func (minee *Minee) AddType(be *BusinessEntity) error {
 	return nil
 }
 
-func (minee *Minee) init() {
-	minee.static.init()
-}
-
-type businessInfo struct {
-	Name           string   `json:"name"`
-	Instanceable   bool     `json:"instanceable"`
-	Allow          []string `json:"allow"` // Allow other Business Types as Child
-	CurrentVersion string   `json:"currentVersion"`
-
-	//Version Specific
-	//GetScript      string   `json:"getScript"`
-	//PostScript     string   `json:"postScript"`
-	// Component
-	// Page
-}
-
-type staticResource struct {
-	data []byte
-}
-
-func (res *staticResource) get(resp http.ResponseWriter) {
-	resp.Write(res.data)
-}
-func (res *staticResource) post(resp http.ResponseWriter, _ []byte, _ map[string][]string) {
-	resp.Header().Set("Allow", "GET")
-	resp.WriteHeader(405)
-}
-func (res *staticResource) put(resp http.ResponseWriter, _ []byte, _ map[string][]string) {
-	resp.Header().Set("Allow", "GET")
-	resp.WriteHeader(405)
-}
-
-type statusCodeResource struct {
-	statusCode int
-	location   string
-}
-
-func (res *statusCodeResource) get(resp http.ResponseWriter) {
-	resp.WriteHeader(res.statusCode)
-	if res.statusCode == 301 {
-		resp.Header().Add("Location", res.location)
-	}
-}
-func (res *statusCodeResource) post(resp http.ResponseWriter, _ []byte, _ map[string][]string) {
-	resp.WriteHeader(res.statusCode)
-}
-func (res *statusCodeResource) put(resp http.ResponseWriter, _ []byte, _ map[string][]string) {
-	resp.WriteHeader(res.statusCode)
-}
-
-type businessResource struct {
-	data       []byte
-	bi         *BusinessEntity
-	minee      *Minee
-	requestURI string
-}
-
-func (res *businessResource) get(resp http.ResponseWriter) {
-	resp.Write(res.data)
-}
-
-func getFirst(headerParam map[string][]string, key string) string {
-	if param, ok := headerParam[key]; ok {
-		if len(param) >= 1 {
-			return param[0]
-		}
-	}
-	return ""
-}
-func contentTypeToBusinessType(contentType string) string {
-	splits := strings.Split(contentType, "/")
-	if len(splits) == 2 {
-		return strings.ReplaceAll(splits[1], ".", "/")
-	}
-	return ""
-}
-
-func (res *businessResource) post(resp http.ResponseWriter, data []byte, headerParam map[string][]string) {
-	businessType := contentTypeToBusinessType(getFirst(headerParam, "Content-Type"))
-	if res.bi.AllowedSubTypes.contains(businessType) {
-		createType := res.minee.entities[businessType]
-		object, err := createType.Unmarshal(data)
-		if err != nil {
-			log.Print(err)
-			return
-		}
-		context := Context{}
-		object, key := res.bi.OnPostBefore(context, object)
-		resp.Header().Add("id", key)
-		if res.bi.OnPostCompute != nil {
-			object = res.bi.OnPostCompute(context, object)
-		}
-		if createType.OnPostCompute != nil {
-			object = createType.OnPostCompute(context, object)
-		}
-		if createType.OnPostAfter != nil {
-			object = createType.OnPostAfter(context, object)
-		}
-		dataToWrite, err := createType.Marshal(object)
-		if err != nil {
-			log.Print(err)
-			return
-		}
-		fileName := res.minee.user + res.requestURI + key + "/data.json"
-		os.MkdirAll(filepath.Dir(fileName), os.ModePerm)
-		if err := os.WriteFile(fileName, dataToWrite, os.ModePerm); err != nil {
-			resp.WriteHeader(500)
-		} else {
-			resp.WriteHeader(201)
-		}
-	} else {
-		resp.WriteHeader(415)
-	}
-}
-func (res *businessResource) put(resp http.ResponseWriter, _ []byte, headerParam map[string][]string) {
-	resp.Header().Set("Allow", "GET")
-	resp.WriteHeader(405)
-}
-
-type resource interface {
-	get(http.ResponseWriter)
-	post(http.ResponseWriter, []byte, map[string][]string)
-	put(http.ResponseWriter, []byte, map[string][]string)
+func (minee *Minee) init() error {
+	return minee.static.init()
 }
 
 func (minee *Minee) getResource(requestURI string) resource {
@@ -206,8 +93,14 @@ func (minee *Minee) getResource(requestURI string) resource {
 		}
 		base := filepath.Base(requestURI)
 		if base == "page.js" && bi.Page != nil {
-			dat, _ := os.ReadFile(minee.business + bi.Page.FileName)
-			return &staticResource{data: dat}
+			dat, err := os.ReadFile(minee.business + bi.Page.FileName)
+			if err == nil {
+				return &staticResource{data: dat}
+			}
+			return &statusCodeResource{
+				statusCode: 500,
+				fault:      err,
+			}
 		}
 	}
 
@@ -224,7 +117,13 @@ func (minee *Minee) getResource(requestURI string) resource {
 				location:   requestURI + "/",
 			}
 		}
-		dat, _ := os.ReadFile(filename)
+		dat, err := os.ReadFile(filename)
+		if err != nil {
+			return &statusCodeResource{
+				statusCode: 500,
+				fault:      err,
+			}
+		}
 		if typeName == nil {
 			return &staticResource{data: dat}
 		}
@@ -247,12 +146,28 @@ func (minee *Minee) getResource(requestURI string) resource {
 	}
 	return &statusCodeResource{statusCode: 404}
 }
+
 func getType(typePath string) *string {
 	if dat, err := os.ReadFile(typePath); err == nil {
 		typeName := string(dat)
 		return &typeName
 	}
 	return nil
+}
+func getSessionCookie(resp http.ResponseWriter, cookies []*http.Cookie) string {
+	for _, cookie := range cookies {
+		if cookie.Name == "Session" {
+			return cookie.Value
+		}
+	}
+	value := strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.FormatInt(rand.Int63(), 36) + "-" + strconv.FormatInt(rand.Int63(), 36)
+	cookie := &http.Cookie{
+		Name:    "Session",
+		Value:   value,
+		Expires: time.Now().Add(time.Hour * 24 * 30),
+	}
+	http.SetCookie(resp, cookie)
+	return value
 }
 func (minee *Minee) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	splits := strings.Split(req.RequestURI, "?")
@@ -263,14 +178,27 @@ func (minee *Minee) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	//}
 
 	resource := minee.getResource(requestURI)
+
+	var user *string
+	if minee.authenticator != nil {
+		user = minee.authenticator(getSessionCookie(resp, req.Cookies()))
+	}
+	context := &Context{
+		UserContext: UserContext{
+			User: user,
+		},
+		RequestContext: RequestContext{
+			resp: resp,
+			req:  req,
+		},
+	}
+
 	if req.Method == "GET" {
-		resource.get(resp)
+		resource.get(context)
 	} else if req.Method == "POST" {
-		dat, _ := io.ReadAll(req.Body)
-		resource.post(resp, dat, req.Header)
+		resource.post(context)
 	} else if req.Method == "PUT" {
-		dat, _ := io.ReadAll(req.Body)
-		resource.put(resp, dat, req.Header)
+		resource.put(context)
 	} else {
 		resp.WriteHeader(404)
 	}

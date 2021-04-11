@@ -19,11 +19,17 @@ func (s *staticProvider) Get(name string) []byte {
 	return nil
 }
 
-func (s *staticProvider) init() {
+func (s *staticProvider) init() error {
 	s.cache = make(map[string][]byte)
-	filepath.Walk(s.root, func(path string, info fs.FileInfo, err error) error {
-		key := strings.ReplaceAll(strings.Replace(path, s.root, "", 1), `\`, "/")
-		dat, _ := os.ReadFile(path)
+	return filepath.WalkDir(s.root, func(path string, info fs.DirEntry, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		key := strings.Replace(strings.ReplaceAll(path, `\`, "/"), s.root, "", 1)
+		dat, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
 		s.cache[key] = dat
 		return nil
 	})

@@ -1,11 +1,22 @@
 package minee
 
+import "net/http"
+
 type Page struct {
 	FileName string
 }
 type Component struct {
 }
+type UserContext struct {
+	User *string
+}
+type RequestContext struct {
+	resp http.ResponseWriter
+	req  *http.Request
+}
 type Context struct {
+	UserContext    UserContext
+	RequestContext RequestContext
 }
 type allowedSubTypes []string
 
@@ -29,7 +40,8 @@ type BusinessEntity struct {
 
 	Unmarshal     func([]byte) (interface{}, error)
 	Marshal       func(interface{}) ([]byte, error)
-	OnPostBefore  func(context Context, data interface{}) (interface{}, string)
-	OnPostCompute func(context Context, data interface{}) interface{}
-	OnPostAfter   func(context Context, data interface{}) interface{}
+	OnPostBefore  func(context *Context, data interface{}) (interface{}, string)
+	OnPostCompute func(context *Context, data interface{}) interface{}
+	OnPostAfter   func(context *Context, data interface{}) interface{}
+	Filter        func(context *Context, data interface{}) interface{}
 }
